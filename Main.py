@@ -189,7 +189,7 @@ def train(num_digits, batch_size, data_dir):
     test_record = os.path.join(TFRECORD_DIR, "test.tfrecords")
     val_record = os.path.join(TFRECORD_DIR, "validation.tfrecords")
 
-    CHECKPOINT_DIR = "./ckpt/"
+    CHECKPOINT_DIR = os.path.join(data_dir, "ckpt")
 
     # placeholder
     x = tf.compat.v1.placeholder(tf.float32, [None, 224, 224])
