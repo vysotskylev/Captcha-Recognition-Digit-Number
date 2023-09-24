@@ -201,7 +201,6 @@ class ImageCaptcha:
         # w2 = w + abs(x1) + abs(x2)
         # h2 = h + abs(y1) + abs(y2)
         data = tuple(x for c in corners for x in c)
-        print(corners, w, h)
         # print(f"w2={w2}, h2={h2}, x1={x1}, x2={x2}, y1={y1}, y2={y2}, data={data}")
         im = im.transform((w, h), QUAD, data)
         # im.crop()

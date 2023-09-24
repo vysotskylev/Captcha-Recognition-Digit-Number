@@ -21,7 +21,8 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 number = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
 
 NUM_DIGITS = 4
-
+NUM_SAMPLES = 1000
+NUM_TEST = 50
 
 # 1---------------------
 def generate_folder():
@@ -46,17 +47,17 @@ def random_captcha_text(char_set=number, captcha_size=NUM_DIGITS):
     return captcha_text
 
 
-def gen_captcha_text_and_image():
+def gen_captcha_text_and_image(idx):
     image = ImageCaptcha()
     captcha_text = random_captcha_text()
     captcha_text = "".join(captcha_text)
-    image.write(captcha_text, "./image/" + captcha_text + ".png")  # write it
+    image.write(captcha_text, f"./image/{idx:04}_{captcha_text}.png")  # write it
 
 
 # 2------------------
 def generate_train_data(num_samples):
     for i in range(num_samples):
-        gen_captcha_text_and_image()
+        gen_captcha_text_and_image(i)
         sys.stdout.write("\r>>creating images %d/%d" % (i + 1, num_samples))
         sys.stdout.flush()
     sys.stdout.write("\n")
@@ -66,7 +67,6 @@ def generate_train_data(num_samples):
 
 # 3--------------------
 def save_as_tf():
-    _NUM_TEST = 500
     _RANDOM_SEED = 0
     DATASET_DIR = "./image/"
     TFRECORD_DIR = "./image/tfrecord/"
@@ -122,7 +122,7 @@ def save_as_tf():
                     image_data = np.array(image_data.convert("L"))
                     image_data = image_data.tobytes()
 
-                    labels = filename.split("/")[-1][0:NUM_DIGITS]
+                    labels = os.path.splitext(os.path.basename(filename))[0].split("_")[1]
                     num_labels = list(map(int, labels))
 
                     example = image_to_tfexample(
@@ -141,8 +141,8 @@ def save_as_tf():
 
         random.seed(_RANDOM_SEED)
         random.shuffle(photo_filenames)
-        training_filenames = photo_filenames[_NUM_TEST:]
-        testing_filenames = photo_filenames[:_NUM_TEST]
+        training_filenames = photo_filenames[NUM_TEST:]
+        testing_filenames = photo_filenames[:NUM_TEST]
 
         _convert_dataset("train", training_filenames, DATASET_DIR)
         _convert_dataset("test", testing_filenames, DATASET_DIR)
@@ -163,7 +163,7 @@ def train():
     x = tf.compat.v1.placeholder(tf.float32, [None, 224, 224])
     y = tf.compat.v1.placeholder(tf.float32, [None, NUM_DIGITS])
 
-    lr = tf.Variable(0.0003, dtype=tf.float32)
+    lr = tf.Variable(0.001, dtype=tf.float32)
 
     def read_and_decode(filename):
         filename_queue = tf.compat.v1.train.string_input_producer([filename])
@@ -366,8 +366,8 @@ def test():
 
 
 if __name__ == "__main__":
-    # generate_folder()
-    # generate_train_data(num_samples=1000)
-    # save_as_tf()
+    generate_folder()
+    generate_train_data(num_samples=NUM_SAMPLES)
+    save_as_tf()
     train()
     test()
