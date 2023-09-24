@@ -22,7 +22,7 @@ __all__ = ['ImageCaptcha']
 ColorTuple = t.Union[t.Tuple[int, int, int], t.Tuple[int, int, int, int]]
 
 CUR_DIR = os.path.abspath(os.path.dirname(__file__))
-DEFAULT_FONTS = [os.path.join(CUR_DIR, 'DroidSansMono.ttf')]
+DEFAULT_FONTS = [os.path.join(CUR_DIR, 'Arial.ttf')]
 
 
 class ImageCaptcha:
@@ -105,20 +105,23 @@ class ImageCaptcha:
             draw: ImageDraw,
             color: ColorTuple) -> Image:
         font = random.choice(self.truefonts)
-        _, _, w, h = draw.multiline_textbbox((1, 1), c, font=font)
+        _, _, w, h = draw.multiline_textbbox((1, 1), c, font)
 
-        dx1 = random.randint(0, 4)
-        dy1 = random.randint(0, 6)
+        dx1 = 0 # random.randint(0, 4)
+        dy1 = 0 # random.randint(0, 6)
         im = createImage('RGBA', (w + dx1, h + dy1))
         Draw(im).text((dx1, dy1), c, font=font, fill=color)
 
         # rotate
-        im = im.crop(im.getbbox())
+        # im = im.crop(im.getbbox()
+        im = im.resize((w, int(h*1.5)))
+        return im
+
         im = im.rotate(random.uniform(-20, 20), BILINEAR, expand=True)
 
         # warp
-        dx2 = w * random.uniform(0.1, 0.2)
-        dy2 = h * random.uniform(0.1, 0.2)
+        dx2 = w * random.uniform(0.0, 0.1)
+        dy2 = h * random.uniform(0.2, 0.3)
         x1 = int(random.uniform(-dx2, dx2))
         y1 = int(random.uniform(-dy2, dy2))
         x2 = int(random.uniform(-dx2, dx2))
@@ -137,6 +140,8 @@ class ImageCaptcha:
 
     def create_captcha_image(
             self,
+            width: int,
+            height: int,
             chars: str,
             color: ColorTuple,
             background: ColorTuple) -> Image:
@@ -148,7 +153,7 @@ class ImageCaptcha:
 
         The color should be a tuple of 3 numbers, such as (0, 255, 255).
         """
-        image = createImage('RGB', (self._width, self._height), background)
+        image = createImage('RGB', (width, height), background)
         draw = Draw(image)
 
         images: t.List[Image] = []
@@ -157,23 +162,50 @@ class ImageCaptcha:
 
         text_width = sum([im.size[0] for im in images])
 
-        width = max(text_width, self._width)
-        image = image.resize((width, self._height))
+        im_width = max(text_width, width)
+        image = image.resize((width, height))
 
         average = int(text_width / len(chars))
         rand = int(0.25 * average)
-        offset = int(average * 0.1)
+        offset = (im_width - text_width) // 2
 
         for im in images:
             w, h = im.size
             mask = im.convert('L').point(self.lookup_table)
-            image.paste(im, (offset, int((self._height - h) / 2)), mask)
-            offset = offset + w + random.randint(-rand, 0)
+            image.paste(im, (offset, int((height - h) / 2)), mask)
+            offset = offset + w + 0 #random.randint(-rand//2, 0)
 
-        if width > self._width:
-            image = image.resize((self._width, self._height))
+        if im_width > self._width:
+            image = image.resize((width, height))
 
         return image
+
+    def _warp(self, im, target_w, target_h):
+        w, h = im.size
+        r = 0.3
+        corners = [
+            [int(w * random.uniform(0, r)), int(h * random.uniform(0, r))]
+            for _ in range(4)
+        ]
+        corners[1][1] = h - corners[1][1]
+        corners[2][0] = w - corners[2][0]
+        corners[2][1] = h - corners[2][1]
+        corners[3][0] = w - corners[3][0]
+
+        # dx2 = w * random.uniform(0.1, 0.2)
+        # dy2 = h * random.uniform(0.1, 0.2)
+        # x1 = int(random.uniform(0, dx2))
+        # y1 = int(random.uniform(0, dy2))
+        # x2 = int(random.uniform(0, dx2))
+        # y2 = int(random.uniform(0, dy2))
+        # w2 = w + abs(x1) + abs(x2)
+        # h2 = h + abs(y1) + abs(y2)
+        data = tuple(x for c in corners for x in c)
+        print(corners, w, h)
+        # print(f"w2={w2}, h2={h2}, x1={x1}, x2={x2}, y1={y1}, y2={y2}, data={data}")
+        im = im.transform((w, h), QUAD, data)
+        # im.crop()
+        return im
 
     def generate_image(self, chars: str) -> Image:
         """Generate the image of the given characters.
@@ -182,10 +214,11 @@ class ImageCaptcha:
         """
         background = random_color(238, 255)
         color = random_color(10, 200, random.randint(220, 255))
-        im = self.create_captcha_image(chars, color, background)
+        im = self.create_captcha_image(2 * self._width, 2 * self._height, chars, color, background)
         self.create_noise_dots(im, color, number=100)
         # self.create_noise_curve(im, color)
         im = im.filter(SMOOTH)
+        im = self._warp(im, self._width, self._height)
         return im
 
     def generate(self, chars: str, format: str = 'png') -> BytesIO:
@@ -224,6 +257,6 @@ def random_color(
 
 
 if __name__ == "__main__":
-    image = ImageCaptcha()
-    data = image.generate('1234')
-    image.write('1234', 'out.png')
+    image = ImageCaptcha(width=200, height=50, font_sizes=(40,))
+    # data = image.generate('123456')
+    image.write('123456', 'out.png')
