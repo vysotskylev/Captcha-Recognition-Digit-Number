@@ -24,9 +24,10 @@ digits_symbols = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
 CHECKPOINT_PREFIX = "crack_captcha_"
 
 CHAR_NUM = 10
-LEARNING_RATE_DROP_ITERS = 100
-CHECKPOINT_ITERS = 100
-STAT_PRINT_ITERS = 10
+LEARNING_RATE_DROP_ITERS = 20_000
+CHECKPOINT_ITERS = 10_000
+STAT_PRINT_ITERS = 500
+TOTAL_ITERS = 100_000 + 1
 
 
 # 1---------------------
@@ -260,7 +261,7 @@ def train(num_digits, batch_size, data_dir):
         coord = tf.train.Coordinator()
         threads = tf.compat.v1.train.start_queue_runners(sess=sess, coord=coord)
 
-        for i in range(100000):
+        for i in range(TOTAL_ITERS):
             b_train_images, b_train_labels = sess.run([train_image_batch, train_label_batch])
             _, train_loss = sess.run(
                 [optimizer, total_loss],
@@ -295,7 +296,7 @@ def train(num_digits, batch_size, data_dir):
                     f"Iter: {i}, Train loss: {train_loss:.3}, Test acc: {test_acc:.3}, Val acc: {val_acc:.3}, LR: {learning_rate:.7}"
                 )
 
-                if i % CHECKPOINT_ITERS == 0:
+                if i % CHECKPOINT_ITERS == 0 and i > 0:
                     saver.save(
                         sess, os.path.join(CHECKPOINT_DIR, f"crack_captcha_{i}.ckpt")
                     )
