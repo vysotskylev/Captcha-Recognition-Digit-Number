@@ -18,13 +18,9 @@ tf.compat.v1.disable_eager_execution()
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
-number = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
+digits_symbols = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
 
-NUM_DIGITS = 4
-NUM_SAMPLES = 1000
-NUM_TEST = 50
-BATCH_SIZE = 16
-CHAR_NUM = 10  # category
+CHAR_NUM = 10
 
 
 # 1---------------------
@@ -42,7 +38,7 @@ def generate_folder():
         os.remove(os.path.join("./image/tfrecord", i))
 
 
-def random_captcha_text(char_set=number, captcha_size=NUM_DIGITS):
+def random_captcha_text(char_set, captcha_size):
     captcha_text = []
     for i in range(captcha_size):
         c = random.choice(char_set)
@@ -50,17 +46,17 @@ def random_captcha_text(char_set=number, captcha_size=NUM_DIGITS):
     return captcha_text
 
 
-def gen_captcha_text_and_image(idx):
+def gen_captcha_text_and_image(idx, num_digits):
     image = ImageCaptcha()
-    captcha_text = random_captcha_text()
+    captcha_text = random_captcha_text(digits_symbols, num_digits)
     captcha_text = "".join(captcha_text)
     image.write(captcha_text, f"./image/{idx:04}_{captcha_text}.png")  # write it
 
 
 # 2------------------
-def generate_train_data(num_samples):
+def generate_train_data(num_samples, num_digits):
     for i in range(num_samples):
-        gen_captcha_text_and_image(i)
+        gen_captcha_text_and_image(i, num_digits)
         sys.stdout.write("\r>>creating images %d/%d" % (i + 1, num_samples))
         sys.stdout.flush()
     sys.stdout.write("\n")
@@ -69,7 +65,7 @@ def generate_train_data(num_samples):
 
 
 # 3--------------------
-def save_as_tf():
+def save_as_tf(num_test):
     _RANDOM_SEED = 0
     DATASET_DIR = "./image/"
     TFRECORD_DIR = "./image/tfrecord/"
@@ -144,8 +140,8 @@ def save_as_tf():
 
         random.seed(_RANDOM_SEED)
         random.shuffle(photo_filenames)
-        training_filenames = photo_filenames[NUM_TEST:]
-        testing_filenames = photo_filenames[:NUM_TEST]
+        training_filenames = photo_filenames[num_test:]
+        testing_filenames = photo_filenames[:num_test]
 
         _convert_dataset("train", training_filenames, DATASET_DIR)
         _convert_dataset("test", testing_filenames, DATASET_DIR)
@@ -153,14 +149,14 @@ def save_as_tf():
 
 
 # 4-------------
-def train():
+def train(num_digits, batch_size):
     tf.compat.v1.reset_default_graph()
     TFRECORD_FILE = "./image/tfrecord/train.tfrecords"
     CHECKPOINT_DIR = "./ckpt/"
 
     # placeholder
     x = tf.compat.v1.placeholder(tf.float32, [None, 224, 224])
-    y = tf.compat.v1.placeholder(tf.float32, [None, NUM_DIGITS])
+    y = tf.compat.v1.placeholder(tf.float32, [None, num_digits])
 
     lr = tf.Variable(0.001, dtype=tf.float32)
 
@@ -172,7 +168,7 @@ def train():
             serialized_example,
             features={
                 "image": tf.io.FixedLenFeature([], tf.string),
-                "labels": tf.io.FixedLenFeature([NUM_DIGITS], tf.int64),
+                "labels": tf.io.FixedLenFeature([num_digits], tf.int64),
             },
         )
         image = tf.io.decode_raw(features["image"], tf.uint8)
@@ -187,14 +183,14 @@ def train():
 
     (image_batch, label_batch,) = tf.compat.v1.train.shuffle_batch(
         [image, labels],
-        batch_size=BATCH_SIZE,
+        batch_size=batch_size,
         capacity=1075,
         min_after_dequeue=1000,
         num_threads=128,
     )
 
     network = Network(
-        num_digits=NUM_DIGITS,
+        num_digits=num_digits,
         num_classes=CHAR_NUM,
         weight_decay=0.0005,
         is_training=True,
@@ -275,10 +271,8 @@ def train():
 
 
 # 5-------------
-def test():
-    IMAGE_HEIGHT = 60
-    IMAGE_WIDTH = 160
-    BATCH_SIZE = 1
+def test(num_digits):
+    batch_size = 1
     TFRECORD_FILE = "./image/tfrecord/test.tfrecords"
 
     x = tf.compat.v1.placeholder(tf.float32, [None, 224, 224])
@@ -291,7 +285,7 @@ def test():
             serialized_example,
             features={
                 "image": tf.io.FixedLenFeature([], tf.string),
-                "labels": tf.io.FixedLenFeature([NUM_DIGITS], tf.int64),
+                "labels": tf.io.FixedLenFeature([num_digits], tf.int64),
             },
         )
         image = tf.io.decode_raw(features["image"], tf.uint8)
@@ -310,7 +304,7 @@ def test():
     # print(len(sess.run(image)))
     (image_batch, image_raw_batch, label_batch,) = tf.compat.v1.train.shuffle_batch(
         [image, image_raw, labels],
-        batch_size=BATCH_SIZE,
+        batch_size=batch_size,
         capacity=53,
         min_after_dequeue=50,
         num_threads=1,
@@ -320,11 +314,11 @@ def test():
     gpu_options = tf.compat.v1.GPUOptions(allow_growth=True)
     # with tf.Session(config=tf.ConfigProto(log_device_placement=False,allow_soft_placement=True,gpu_options=gpu_options)) as sess:
     with tf.compat.v1.Session() as sess:
-        X = tf.reshape(x, [BATCH_SIZE, 224, 224, 1])
+        X = tf.reshape(x, [batch_size, 224, 224, 1])
 
         logits, end_pintos = network.construct(X)
 
-        predictions = tf.reshape(logits, [-1, NUM_DIGITS, CHAR_NUM])
+        predictions = tf.reshape(logits, [-1, num_digits, CHAR_NUM])
         predictions = tf.argmax(predictions, -1)
 
         sess.run(tf.compat.v1.global_variables_initializer())
@@ -364,8 +358,13 @@ def test():
 
 
 if __name__ == "__main__":
+    NUM_DIGITS = 4
+    NUM_SAMPLES = 1000
+    NUM_TEST = 50
+    BATCH_SIZE = 16
+
     generate_folder()
-    generate_train_data(num_samples=NUM_SAMPLES)
-    save_as_tf()
-    train()
-    test()
+    generate_train_data(num_samples=NUM_SAMPLES, num_digits=NUM_DIGITS)
+    save_as_tf(num_test=NUM_TEST)
+    train(num_digits=NUM_DIGITS, batch_size=BATCH_SIZE)
+    test(num_digits=NUM_DIGITS)
