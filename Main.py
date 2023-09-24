@@ -47,7 +47,7 @@ def random_captcha_text(char_set, captcha_size):
 
 
 def gen_captcha_text_and_image(idx, num_digits):
-    image = ImageCaptcha()
+    image = ImageCaptcha(width=200, height=50, font_sizes=(40,))
     captcha_text = random_captcha_text(digits_symbols, num_digits)
     captcha_text = "".join(captcha_text)
     image.write(captcha_text, f"./image/{idx:04}_{captcha_text}.png")  # write it

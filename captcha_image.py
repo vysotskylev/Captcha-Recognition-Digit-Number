@@ -91,12 +91,11 @@ class ImageCaptcha:
             number: int = 30) -> Image:
         draw = Draw(image)
         w, h = image.size
-        while number:
+        for _ in range(number):
             actual_width = random.random() * width
             x1 = random.randint(0, w)
             y1 = random.randint(0, h)
             draw.line(((x1, y1), (x1 - 1, y1 - 1)), fill=color, width=int(math.ceil(actual_width)))
-            number -= 1
         return image
 
     def _draw_character(
@@ -214,7 +213,7 @@ class ImageCaptcha:
         background = random_color(238, 255)
         color = random_color(10, 200, random.randint(220, 255))
         im = self.create_captcha_image(2 * self._width, 2 * self._height, chars, color, background)
-        self.create_noise_dots(im, color, number=100)
+        self.create_noise_dots(im, color, number=300)
         # self.create_noise_curve(im, color)
         im = im.filter(SMOOTH)
         im = self._warp(im, self._width, self._height)
