@@ -23,6 +23,9 @@ number = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
 NUM_DIGITS = 4
 NUM_SAMPLES = 1000
 NUM_TEST = 50
+BATCH_SIZE = 16
+CHAR_NUM = 10  # category
+
 
 # 1---------------------
 def generate_folder():
@@ -152,10 +155,6 @@ def save_as_tf():
 # 4-------------
 def train():
     tf.compat.v1.reset_default_graph()
-    CHAR_NUM = 10
-    IMAGE_HEIGHT = 60
-    IMAGE_WIDTH = 160
-    BATCH_SIZE = 16
     TFRECORD_FILE = "./image/tfrecord/train.tfrecords"
     CHECKPOINT_DIR = "./ckpt/"
 
@@ -277,7 +276,6 @@ def train():
 
 # 5-------------
 def test():
-    CHAR_NUM = 10  # category
     IMAGE_HEIGHT = 60
     IMAGE_WIDTH = 160
     BATCH_SIZE = 1
