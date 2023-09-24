@@ -1,4 +1,4 @@
-#Author: AlexFang, alex.holla@foxmail.com.
+# Author: AlexFang, alex.holla@foxmail.com.
 # %load alexnet.py
 # Copyright 2016 The TensorFlow Authors. All Rights Reserved.
 #
@@ -39,34 +39,38 @@ from __future__ import division
 from __future__ import print_function
 import tensorflow as tf
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
-slim = tf.contrib.slim
-trunc_normal = lambda stddev: tf.truncated_normal_initializer(0.0, stddev)
+import tf_slim as slim
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
+trunc_normal = lambda stddev: tf.compat.v1.truncated_normal_initializer(0.0, stddev)
 
 
 class Network:
-    def __init__(self,num_classes, weight_decay, is_training):
-        self.num_classes=num_classes
-        self.weight_decay=weight_decay
-        self.is_training=is_training
+    def __init__(self, num_digits, num_classes, weight_decay, is_training):
+        self.num_digits = num_digits
+        self.num_classes = num_classes
+        self.weight_decay = weight_decay
+        self.is_training = is_training
         self.alexnet_v2_arg_scope(weight_decay=0.0005)
 
-    def alexnet_v2_arg_scope(self,weight_decay=0.0005):
-        with slim.arg_scope([slim.conv2d, slim.fully_connected],
-                          activation_fn=tf.nn.relu,
-                          biases_initializer=tf.constant_initializer(0.1),
-                          weights_regularizer=slim.l2_regularizer(weight_decay)):
-                              with slim.arg_scope([slim.conv2d], padding='SAME'):
-                                  with slim.arg_scope([slim.max_pool2d], padding='VALID') as arg_sc:
-                                      return arg_sc
+    def alexnet_v2_arg_scope(self, weight_decay=0.0005):
+        with slim.arg_scope(
+            [slim.conv2d, slim.fully_connected],
+            activation_fn=tf.nn.relu,
+            biases_initializer=tf.compat.v1.constant_initializer(0.1),
+            weights_regularizer=tf.keras.regularizers.l2(0.5 * (weight_decay)),
+        ):
+            with slim.arg_scope([slim.conv2d], padding="SAME"):
+                with slim.arg_scope([slim.max_pool2d], padding="VALID") as arg_sc:
+                    return arg_sc
 
-
-    def construct(self,inputs):
-        num_classes=self.num_classes
-        is_training=self.is_training
-        dropout_keep_prob=0.5
-        spatial_squeeze=True
-        scope = 'alexnet_v2'
+    def construct(self, inputs):
+        num_classes = self.num_classes
+        is_training = self.is_training
+        dropout_keep_prob = 0.5
+        spatial_squeeze = True
+        scope = "alexnet_v2"
         global_pool = False
         """AlexNet version 2.
     
@@ -85,7 +89,7 @@ class Network:
         Args:
           inputs: a tensor of size [batch_size, height, width, channels].
           num_classes: the number of predicted classes. If 0 or None, the logits layer
-          is omitted and the input features to the logits layer are returned instead.
+            is omitted and the input features to the logits layer are returned instead.
           is_training: whether or not the model is being trained.
           dropout_keep_prob: the probability that activations are kept in the dropout
             layers during training.
@@ -102,71 +106,66 @@ class Network:
             or None).
           end_points: a dict of tensors with intermediate activations.
         """
-        with tf.variable_scope(scope, 'alexnet_v2', [inputs]) as sc:
-            end_points_collection = sc.original_name_scope + '_end_points'
+        with tf.compat.v1.variable_scope(scope, "alexnet_v2", [inputs]) as sc:
+            end_points_collection = sc.original_name_scope + "_end_points"
             # Collect outputs for conv2d, fully_connected and max_pool2d.
-            with slim.arg_scope([slim.conv2d, slim.fully_connected, slim.max_pool2d],
-                                outputs_collections=[end_points_collection]):
-                net = slim.conv2d(inputs, 64, [11, 11], 4, padding='VALID',
-                                  scope='conv1')
-                net = slim.max_pool2d(net, [3, 3], 2, scope='pool1')
-                net = slim.conv2d(net, 192, [5, 5], scope='conv2')
-                net = slim.max_pool2d(net, [3, 3], 2, scope='pool2')
-                net = slim.conv2d(net, 384, [3, 3], scope='conv3')
-                net = slim.conv2d(net, 384, [3, 3], scope='conv4')
-                net = slim.conv2d(net, 256, [3, 3], scope='conv5')
-                net = slim.max_pool2d(net, [3, 3], 2, scope='pool5')
+            with slim.arg_scope(
+                [slim.conv2d, slim.fully_connected, slim.max_pool2d],
+                outputs_collections=[end_points_collection],
+            ):
+                net = slim.conv2d(
+                    inputs, 64, [11, 11], 4, padding="VALID", scope="conv1"
+                )
+                net = slim.max_pool2d(net, [3, 3], 2, scope="pool1")
+                net = slim.conv2d(net, 192, [5, 5], scope="conv2")
+                net = slim.max_pool2d(net, [3, 3], 2, scope="pool2")
+                net = slim.conv2d(net, 384, [3, 3], scope="conv3")
+                net = slim.conv2d(net, 384, [3, 3], scope="conv4")
+                net = slim.conv2d(net, 256, [3, 3], scope="conv5")
+                net = slim.max_pool2d(net, [3, 3], 2, scope="pool5")
 
             # Use conv2d instead of fully_connected layers.
-            with slim.arg_scope([slim.conv2d],
-                                weights_initializer=trunc_normal(0.005),
-                                biases_initializer=tf.constant_initializer(0.1)):
-                net = slim.conv2d(net, 4096, [5, 5], padding='VALID',
-                                  scope='fc6')
-                net = slim.dropout(net, dropout_keep_prob, is_training=is_training,
-                                   scope='dropout6')
-                net = slim.conv2d(net, 4096, [1, 1], scope='fc7')
-                net = slim.dropout(net, dropout_keep_prob, is_training=is_training,
-                                   scope='dropout7')
+            with slim.arg_scope(
+                [slim.conv2d],
+                weights_initializer=trunc_normal(0.005),
+                biases_initializer=tf.compat.v1.constant_initializer(0.1),
+            ):
+                net = slim.conv2d(net, 4096, [5, 5], padding="VALID", scope="fc6")
+                net = slim.dropout(
+                    net, dropout_keep_prob, is_training=is_training, scope="dropout6"
+                )
+                net = slim.conv2d(net, 4096, [1, 1], scope="fc7")
+                net = slim.dropout(
+                    net, dropout_keep_prob, is_training=is_training, scope="dropout7"
+                )
 
-                net0 = slim.conv2d(net, num_classes, [1, 1],
-                                   activation_fn=None,
-                                   normalizer_fn=None,
-                                   biases_initializer=tf.zeros_initializer(),
-                                   scope='fc8_0')
-                net1 = slim.conv2d(net, num_classes, [1, 1],
-                                   activation_fn=None,
-                                   normalizer_fn=None,
-                                   biases_initializer=tf.zeros_initializer(),
-                                   scope='fc8_1')
-                net2 = slim.conv2d(net, num_classes, [1, 1],
-                                   activation_fn=None,
-                                   normalizer_fn=None,
-                                   biases_initializer=tf.zeros_initializer(),
-                                   scope='fc8_2')
-                net3 = slim.conv2d(net, num_classes, [1, 1],
-                                   activation_fn=None,
-                                   normalizer_fn=None,
-                                   biases_initializer=tf.zeros_initializer(),
-                                   scope='fc8_3')
+                logits = []
+                for i in range(self.num_digits):
+                    net = slim.conv2d(
+                        net,
+                        num_classes,
+                        [1, 1],
+                        activation_fn=None,
+                        normalizer_fn=None,
+                        biases_initializer=tf.compat.v1.zeros_initializer(),
+                        scope=f"fc8_{i}",
+                    )
+                    logits.append(net)
 
                 # Convert end_points_collection into a end_point dict.
-                end_points = slim.utils.convert_collection_to_dict(end_points_collection)
+                end_points = slim.utils.convert_collection_to_dict(
+                    end_points_collection
+                )
 
                 if spatial_squeeze:
-                    net0 = tf.squeeze(net0, [1, 2], name='fc8_0/squeezed')
-                    end_points[sc.name + '/fc8_0'] = net0
+                    for i in range(self.num_digits):
+                        net = tf.squeeze(logits[i], [1, 2], name=f"fc8_{i}/squeezed")
+                        end_points[f"{sc.name}/fc8_{i}"] = net
+                        logits[i] = net
 
-                    net1 = tf.squeeze(net1, [1, 2], name='fc8_1/squeezed')
-                    end_points[sc.name + '/fc8_1'] = net1
-
-                    net2 = tf.squeeze(net2, [1, 2], name='fc8_2/squeezed')
-                    end_points[sc.name + '/fc8_2'] = net2
-
-                    net3 = tf.squeeze(net3, [1, 2], name='fc8_3/squeezed')
-                    end_points[sc.name + '/fc8_3'] = net3
-
-                return net0, net1, net2, net3, end_points
-
+                return (
+                    tf.concat([tf.expand_dims(l, 1) for l in logits], axis=1),
+                    end_points,
+                )
 
             alexnet_v2.default_image_size = 224
