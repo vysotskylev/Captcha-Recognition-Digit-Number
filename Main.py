@@ -178,7 +178,7 @@ def read_and_decode(filename, num_digits):
 
 
 # 4-------------
-def train(num_digits, batch_size, data_dir):
+def train(num_digits, batch_size, data_dir, restore_checkpoint=False):
     tf.compat.v1.reset_default_graph()
 
     DATASET_DIR = os.path.join(data_dir, "image")
@@ -255,6 +255,9 @@ def train(num_digits, batch_size, data_dir):
 
         saver = tf.compat.v1.train.Saver()
         sess.run(tf.compat.v1.global_variables_initializer())
+
+        if restore_checkpoint:
+            saver.restore(sess, get_most_recent_checkpoint(data_dir))
 
         coord = tf.train.Coordinator()
         threads = tf.compat.v1.train.start_queue_runners(sess=sess, coord=coord)
