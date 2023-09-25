@@ -22,9 +22,10 @@ digits_symbols = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
 CHECKPOINT_PREFIX = "crack_captcha_"
 
 CHAR_NUM = 10
+IMAGE_CHUNK_SIZE = 1_000
 LEARNING_RATE_DROP_ITERS = 20_000
 CHECKPOINT_ITERS = 10_000
-STAT_PRINT_ITERS = 500
+STAT_PRINT_ITERS = 200
 TOTAL_ITERS = 100_000 + 1
 
 
@@ -32,8 +33,9 @@ TOTAL_ITERS = 100_000 + 1
 def generate_folder(data_dir):
     image_dir = os.path.join(data_dir, "image")
     os.makedirs(image_dir, exist_ok=True)
-    for i in os.listdir(image_dir):
-        os.remove(os.path.join(image_dir, i))
+    for chunk_dir in os.listdir(image_dir):
+        for f in os.listdir(os.path.join(image_dir, chunk_dir)):
+            os.remove(os.path.join(image_dir, chunk_dir, f))
     tfrecord_dir = os.path.join(data_dir, "tfrecord")
     os.makedirs(tfrecord_dir, exist_ok=True)
     for i in os.listdir(tfrecord_dir):
@@ -48,17 +50,19 @@ def random_captcha_text(char_set, captcha_size):
     return captcha_text
 
 
-def gen_captcha_text_and_image(idx, num_digits, data_dir):
+def gen_captcha_text_and_image(idx, num_digits, data_dir, chunk_size):
     image = ImageCaptcha(width=200, height=50, font_sizes=(40,))
     captcha_text = random_captcha_text(digits_symbols, num_digits)
     captcha_text = "".join(captcha_text)
-    image.write(captcha_text, os.path.join(data_dir, "image", f"{idx:06}_{captcha_text}.png"))  # write it
+    subdir = f"{idx - idx % chunk_size:06}"
+    os.makedirs(os.path.join(data_dir, "image", subdir), exist_ok=True)
+    image.write(captcha_text, os.path.join(data_dir, "image", subdir, f"{idx:06}_{captcha_text}.png"))  # write it
 
 
 # 2------------------
 def generate_train_data(num_samples, num_digits, data_dir):
     for i in range(num_samples):
-        gen_captcha_text_and_image(i, num_digits, data_dir)
+        gen_captcha_text_and_image(i, num_digits, data_dir, IMAGE_CHUNK_SIZE)
         sys.stdout.write("\r>>creating images %d/%d" % (i + 1, num_samples))
         sys.stdout.flush()
     sys.stdout.write("\n")
@@ -82,9 +86,10 @@ def save_as_tf(num_test, data_dir):
 
     def _get_filenames_and_classes(dataset_dir):
         photo_filenames = []
-        for filename in os.listdir(dataset_dir):
-            path = os.path.join(dataset_dir, filename)
-            photo_filenames.append(path)
+        for chunk_dir in os.listdir(dataset_dir):
+            for filename in os.listdir(os.path.join(dataset_dir, chunk_dir)):
+                path = os.path.join(dataset_dir, chunk_dir, filename)
+                photo_filenames.append(path)
         return photo_filenames
 
     def int64_feature(values):
@@ -178,7 +183,7 @@ def read_and_decode(filename, num_digits):
 
 
 # 4-------------
-def train(num_digits, batch_size, data_dir, restore_checkpoint=False):
+def train(num_digits, batch_size, data_dir, restore_checkpoint=False, flush_callback=None):
     tf.compat.v1.reset_default_graph()
 
     DATASET_DIR = os.path.join(data_dir, "image")
@@ -257,7 +262,12 @@ def train(num_digits, batch_size, data_dir, restore_checkpoint=False):
         sess.run(tf.compat.v1.global_variables_initializer())
 
         if restore_checkpoint:
-            saver.restore(sess, get_most_recent_checkpoint(data_dir))
+            ckpt = get_most_recent_checkpoint(data_dir)
+            if ckpt is None:
+                print("WARNING: No checkpoint found!")
+            else:
+                print(f"Restoring from {ckpt}")
+                saver.restore(sess, ckpt)
 
         coord = tf.train.Coordinator()
         threads = tf.compat.v1.train.start_queue_runners(sess=sess, coord=coord)
@@ -299,8 +309,10 @@ def train(num_digits, batch_size, data_dir, restore_checkpoint=False):
 
                 if i % CHECKPOINT_ITERS == 0 and i > 0:
                     saver.save(
-                        sess, os.path.join(CHECKPOINT_DIR, f"crack_captcha_{i}.ckpt")
+                        sess, os.path.join(CHECKPOINT_DIR, f"{CHECKPOINT_PREFIX}{i}.ckpt")
                     )
+                    if flush_callback is not None:
+                        flush_callback()
                     print("Save model %s------" % str(i))
                     continue
         coord.request_stop()
@@ -335,6 +347,8 @@ def find_oldest_file_in_directory(directory, pattern):
 def get_most_recent_checkpoint(data_dir):
     CHECKPOINT_DIR = os.path.join(data_dir, "ckpt")
     path = find_oldest_file_in_directory(CHECKPOINT_DIR, CHECKPOINT_PREFIX + r"\d+\.ckpt\..+")
+    if path is None:
+        return None
     return ".".join(path.split(".")[:-1])
 
 
@@ -409,7 +423,7 @@ def test(num_digits, data_dir):
 
 
 if __name__ == "__main__":
-    NUM_DIGITS = 4
+    NUM_DIGITS = 6
     NUM_SAMPLES = 1000
     NUM_TEST = 50
     BATCH_SIZE = 16
@@ -418,5 +432,5 @@ if __name__ == "__main__":
     generate_folder(data_dir=DATA_DIR)
     generate_train_data(num_samples=NUM_SAMPLES, num_digits=NUM_DIGITS, data_dir=DATA_DIR)
     save_as_tf(num_test=NUM_TEST, data_dir=DATA_DIR)
-    train(num_digits=NUM_DIGITS, batch_size=BATCH_SIZE, data_dir=DATA_DIR)
+    train(num_digits=NUM_DIGITS, batch_size=BATCH_SIZE, data_dir=DATA_DIR, restore_checkpoint=True)
     test(num_digits=NUM_DIGITS, data_dir=DATA_DIR)
